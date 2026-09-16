@@ -93,8 +93,8 @@ describe('step execution (integration)', () => {
 			admittance: new AllowAllAdmittance(),
 			identityVerifier: new SharedSecretIdentityVerifier(secret),
 			responseChannel: new ExecutionResponseChannel(noopResponseTransport, createConsoleLogger()),
-			// also how the test reaches the stores the runtime owns
 			waitSweepIntervalMs,
+			// also how the test reaches the stores the runtime owns
 			externalDependencies: ({ executionStore, stepStore }) => {
 				const finishExecution = executionStore.finishExecution.bind(executionStore);
 				vi.spyOn(executionStore, 'finishExecution').mockImplementation(async (id, status) => {
