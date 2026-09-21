@@ -42,6 +42,14 @@ export { BinaryDataSignedQueryDto } from './binary-data/binary-data-signed-query
 
 export { BreakingChangeReportQueryDto } from './breaking-changes/breaking-change-report-query.dto';
 
+export {
+	AuditPublicDto,
+	GenerateAuditPublicDto,
+	SECURITY_AUDIT_CATEGORIES,
+	auditPublicSchema,
+	type AuditPublic,
+} from './audit/audit-public.dto';
+
 export { LoginRequestDto } from './auth/login-request.dto';
 export { ResolveSignupTokenQueryDto } from './auth/resolve-signup-token-query.dto';
 export { EmbedLoginQueryDto } from './auth/embed-login-query.dto';
