@@ -34,6 +34,7 @@ import { useInstanceAiBrowserUseExperiment } from '@/experiments/instanceAiBrows
 import DefaultEditorSetting from '@/experiments/openWorkflowInAssistant/components/DefaultEditorSetting.vue';
 import { useInstanceAiComputerUseExperiment } from '@/experiments/instanceAiComputerUse';
 import { useInstanceAiMcpConnectionsExperiment } from '@/experiments/instanceAiMcpConnections';
+import { isContextPreferencesEnabled } from '@/features/settings/context/context.utils';
 import { useInstanceCredentialTest } from '../composables/useInstanceCredentialTest';
 import { useInstanceAiConfiguration } from '../composables/useInstanceAiConfiguration';
 import { useInstanceAiSettingsStore } from '../instanceAiSettings.store';
@@ -170,6 +171,8 @@ const MCP_TOOL_PERMISSION_OPTIONS: InstanceAiPermissionMode[] = [
 	'always_allow',
 ];
 
+const PREFERENCE_PERMISSION_OPTIONS: InstanceAiPermissionMode[] = ['always_allow', 'blocked'];
+
 const PERMISSION_OPTION_LABEL: Record<InstanceAiPermissionMode, BaseTextKey> = {
 	require_approval: 'settings.n8nAgent.permissions.needsApproval',
 	always_allow: 'settings.n8nAgent.permissions.alwaysAllow',
@@ -235,11 +238,18 @@ const MCP_PERMISSION_GROUP: PermissionGroup = {
 	keys: ['executeMcpTool'],
 };
 
-const permissionGroups = computed(() =>
-	isMcpConnectionsExperimentEnabled.value
+const PREFERENCES_PERMISSION_GROUP: PermissionGroup = {
+	id: 'preferences',
+	labelKey: 'settings.n8nAgent.permissions.group.preferences',
+	keys: ['createPreference'],
+};
+
+const permissionGroups = computed(() => {
+	const groups = isMcpConnectionsExperimentEnabled.value
 		? [...PERMISSION_GROUPS, MCP_PERMISSION_GROUP]
-		: PERMISSION_GROUPS,
-);
+		: PERMISSION_GROUPS;
+	return isContextPreferencesEnabled() ? [...groups, PREFERENCES_PERMISSION_GROUP] : groups;
+});
 
 const expandedGroups = reactive<Record<string, boolean>>({});
 
@@ -261,7 +271,9 @@ function groupSummary(group: PermissionGroup) {
 }
 
 function permissionOptionsFor(key: keyof InstanceAiPermissions) {
-	return key === 'executeMcpTool' ? MCP_TOOL_PERMISSION_OPTIONS : PERMISSION_OPTIONS;
+	if (key === 'executeMcpTool') return MCP_TOOL_PERMISSION_OPTIONS;
+	if (key === 'createPreference') return PREFERENCE_PERMISSION_OPTIONS;
+	return PERMISSION_OPTIONS;
 }
 
 /** Exactly one dialog can be active; transitions between steps never observe an all-closed state. */

@@ -1116,7 +1116,7 @@ export const threadTitleUpdatedPayloadSchema = z.object({
  * An empty `preferences` array says that the turn applied none. No event at all says that
  * the code path never ran, which is a different fact.
  *
- * CONTEXT-137 defines the shape. CONTEXT-139 publishes the event on every turn.
+ * This schema defines that shape. The turn publishes the event that carries it.
  */
 const appliedPreferenceSchema = z.object({
 	/** Stable row id, so a reader can link to the preference or edit it. */
@@ -2074,6 +2074,7 @@ const instanceAiPermissionsSchema = z.object({
 	restoreWorkflowVersion: instanceAiPermissionModeSchema,
 	executeNode: instanceAiPermissionModeSchema,
 	executeMcpTool: instanceAiPermissionModeSchema,
+	createPreference: instanceAiPermissionModeSchema,
 });
 
 export type InstanceAiPermissions = z.infer<typeof instanceAiPermissionsSchema>;
@@ -2101,6 +2102,10 @@ export const DEFAULT_INSTANCE_AI_PERMISSIONS: InstanceAiPermissions = {
 	restoreWorkflowVersion: 'require_approval',
 	executeNode: 'require_approval',
 	executeMcpTool: 'require_approval',
+	// The save_user_preference tool writes first and lets the user edit or undo
+	// from the chat card, so there is no approval step for require_approval to
+	// gate. always_allow is the only workable default; blocked is the feature off.
+	createPreference: 'always_allow',
 };
 
 /**
@@ -2314,7 +2319,13 @@ export type InstanceAiConnectionUpdate = z.infer<typeof instanceAiConnectionSche
 
 export class InstanceAiAdminSettingsUpdateRequest extends Z.class({
 	enabled: z.boolean().optional(),
-	permissions: instanceAiPermissionsSchema.partial().optional(),
+	permissions: instanceAiPermissionsSchema
+		.partial()
+		.refine((permissions) => permissions.createPreference !== 'require_approval', {
+			message: 'createPreference supports always_allow and blocked only',
+			path: ['createPreference'],
+		})
+		.optional(),
 	mcpServers: z.string().optional(),
 	mcpAccessEnabled: z.boolean().optional(),
 	sandboxEnabled: z.boolean().optional(),
