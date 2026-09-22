@@ -39,7 +39,11 @@ import type { RelayEventMap } from '@/events/maps/relay.event-map';
 import { determineFinalExecutionStatus } from '@/execution-lifecycle/shared/shared-hook-functions';
 import type { IExecutionTrackProperties } from '@/interfaces';
 import { License } from '@/license';
-import { partitionTypesByAction } from '@/modules/type-availability-policies/policy-evaluator';
+import { policedTypeFor } from '@/modules/type-availability-policies/package-resolver';
+import {
+	partitionTypesByAction,
+	type PolicedType,
+} from '@/modules/type-availability-policies/policy-evaluator';
 import type {
 	PolicyAction,
 	PolicyRule,
@@ -115,12 +119,12 @@ const MAX_LISTED_POLICY_TYPES = 100;
 function summarizeTypeAvailability(
 	rules: readonly PolicyRule[],
 	defaultAction: PolicyAction,
-	typeNames: readonly string[],
+	types: readonly PolicedType[],
 ) {
-	const partition = partitionTypesByAction(rules, defaultAction, typeNames);
+	const partition = partitionTypesByAction(rules, defaultAction, types);
 
 	return {
-		evaluated_type_count: typeNames.length,
+		evaluated_type_count: types.length,
 		blocked_type_count: partition.deny.length,
 		allowed_type_count: partition.allow.length,
 		delegated_type_count: partition.delegate.length,
@@ -562,7 +566,7 @@ export class TelemetryEventRelay extends EventRelay {
 			...summarizeTypeAvailability(
 				rulesAfter,
 				after.defaultAction,
-				Object.keys(this.nodeTypes.getKnownTypes()),
+				Object.keys(this.nodeTypes.getKnownTypes()).map(policedTypeFor(kind, this.nodeTypes)),
 			),
 			previous_rule_count: rulesBefore?.length ?? null,
 			shadow_warning_count: warningCount,

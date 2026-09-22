@@ -26,6 +26,7 @@ const CHECK_ID = 'node-type-availability';
 
 const MANUAL_TRIGGER = 'n8n-nodes-base.manualTrigger';
 const SET = 'n8n-nodes-base.set';
+const SET_TOOL = 'n8n-nodes-base.setTool';
 const SCHEDULE_TRIGGER = 'n8n-nodes-base.scheduleTrigger';
 
 // `endpointGroups` is load-bearing beyond the routes it mounts: `setupTestServer` only reaches
@@ -223,6 +224,24 @@ describe('POST /workflows', () => {
 			meta: { violations: [violationFor(SET, 'instance', 'deny-set')] },
 		});
 		await expect(workflowRepository.count()).resolves.toBe(0);
+	});
+
+	test('blocks the synthetic tool variant of a blocked type', async () => {
+		await putInstancePolicy({ rules: [rule('deny-set', 'deny', SET)] });
+
+		const response = await ownerAgent
+			.post('/workflows')
+			.send({
+				name: 'New workflow',
+				nodes: [node(MANUAL_TRIGGER), node(SET_TOOL)],
+				connections: {},
+			})
+			.expect(403);
+
+		expect(response.body).toMatchObject({
+			code: 403,
+			meta: { violations: [violationFor(SET_TOOL, 'instance', 'deny-set')] },
+		});
 	});
 
 	test('has nothing to grandfather, so a create is judged on its whole content', async () => {

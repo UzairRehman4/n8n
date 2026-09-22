@@ -690,6 +690,41 @@ describe('TelemetryEventRelay', () => {
 					'@acme/n8n-nodes-acme.thing',
 				),
 			);
+			nodeTypes.resolveBaseName.mockImplementation((name) => ({
+				baseName: name,
+				isSyntheticTool: false,
+			}));
+		});
+
+		it('should count a synthetic tool variant under the rule for its node', () => {
+			nodeTypes.getKnownTypes.mockReturnValue(
+				knownTypes('n8n-nodes-base.executeCommand', 'n8n-nodes-base.executeCommandTool'),
+			);
+			nodeTypes.resolveBaseName.mockImplementation((name) => ({
+				baseName:
+					name === 'n8n-nodes-base.executeCommandTool' ? 'n8n-nodes-base.executeCommand' : name,
+				isSyntheticTool: name === 'n8n-nodes-base.executeCommandTool',
+			}));
+
+			eventService.emit('node-type-policy-saved', {
+				updatedBy: 'user123',
+				kind: 'node-types',
+				projectId: null,
+				scopeId: 'scope-1',
+				before: null,
+				after: { defaultAction: 'allow', version: 1 },
+				rulesBefore: null,
+				rulesAfter: [denyRule],
+				warningCount: 0,
+			});
+
+			expect(telemetry.track).toHaveBeenCalledWith(
+				TELEMETRY_EVENT.NODE_TYPE_POLICIES.USER_SAVED_NODE_TYPE_POLICY,
+				expect.objectContaining({
+					blocked_type_count: 2,
+					blocked_types: ['n8n-nodes-base.executeCommand', 'n8n-nodes-base.executeCommandTool'],
+				}),
+			);
 		});
 
 		it('should track a first instance-scope save', () => {
