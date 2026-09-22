@@ -2449,6 +2449,7 @@ export class InstanceAiService {
 			instanceContextEnabled,
 			conversationHistory,
 			folderExplorationEnabled,
+			aiPreferencesEnabled,
 			modelId,
 		});
 
