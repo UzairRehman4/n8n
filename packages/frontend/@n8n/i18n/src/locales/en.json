@@ -7306,6 +7306,8 @@
 	"instanceAi.askUser.skip": "Skip",
 	"instanceAi.preferenceCard.saved": "Preference saved",
 	"instanceAi.preferenceCard.removed": "Preference removed",
+	"instanceAi.preferenceCard.notSaved": "Preference not saved",
+	"instanceAi.preferenceCard.notSavedFallback": "The preference could not be saved",
 	"instanceAi.preferenceCard.appliesTo": "Applies to {scope}",
 	"instanceAi.preferenceCard.scope.user": "Just you",
 	"instanceAi.preferenceCard.edit": "Edit",
