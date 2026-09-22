@@ -21,7 +21,7 @@ export class LicenseRenewalTask implements SystemTask {
 	/** A retry after a failed renewal resends a token the server may have rotated already. */
 	readonly effects: SystemTaskEffects = 'non-idempotent';
 
-	readonly durable = false;
+	readonly durable = true;
 
 	/** A new leader may inherit a due renewal whose window closes before the next interval. */
 	readonly runOnTakeover = true;
