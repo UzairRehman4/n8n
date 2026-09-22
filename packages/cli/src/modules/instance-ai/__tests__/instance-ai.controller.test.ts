@@ -37,6 +37,8 @@ vi.mock('../eval/execution.service', () => ({
 }));
 
 import type {
+	AiPreferenceDto,
+	InstanceAiPreferenceCardEvent,
 	InstanceAiAdminSettingsUpdateRequest,
 	InstanceAiEvalCredentialAllowlistRequest,
 	InstanceAiEvalRestoreThreadRequest,
@@ -91,6 +93,7 @@ import type { LocalGateway } from '../filesystem/local-gateway';
 import type { InstanceAiGatewayService } from '../instance-ai-gateway.service';
 import type { InstanceAiMemoryService } from '../instance-ai-memory.service';
 import type { InstanceAiPendingAgentService } from '../instance-ai-pending-agent.service';
+import type { InstanceAiPreferenceCardService } from '../instance-ai-preference-card.service';
 import type { InstanceAiModelCatalogService } from '../instance-ai-model-catalog.service';
 import type { InstanceAiSettingsService } from '../instance-ai-settings.service';
 import { InstanceAiController } from '../instance-ai.controller';
@@ -139,6 +142,7 @@ describe('InstanceAiController', () => {
 
 	const evalCredentialAllowlists = new EvalThreadCredentialAllowlistService();
 	const evalThreadRestore = mock<EvalThreadRestoreService>();
+	const preferenceCardService = mock<InstanceAiPreferenceCardService>();
 
 	const controller = new InstanceAiController(
 		instanceAiService,
@@ -163,6 +167,7 @@ describe('InstanceAiController', () => {
 		projectService,
 		instanceAiErrorReporter,
 		publisher,
+		preferenceCardService,
 		globalConfig,
 	);
 
@@ -1437,6 +1442,68 @@ describe('InstanceAiController', () => {
 		});
 	});
 
+	describe('preference card routes', () => {
+		it('should require instanceAi:message scope', () => {
+			expect(scopeOf('undoPreference')).toEqual({
+				scope: 'instanceAi:message',
+				globalOnly: true,
+			});
+			expect(scopeOf('editPreference')).toEqual({
+				scope: 'instanceAi:message',
+				globalOnly: true,
+			});
+		});
+
+		const undoneEvent: InstanceAiPreferenceCardEvent = {
+			type: 'preference-card',
+			runId: 'run-1',
+			agentId: 'orchestrator-run-1',
+			payload: { toolCallId: 'tc-1', preferenceId: 'pref-1', state: 'undone' },
+		};
+
+		it('undo checks thread access, then returns the published fact', async () => {
+			memoryService.checkThreadOwnership.mockResolvedValue('owned');
+			preferenceCardService.undo.mockResolvedValue(undoneEvent);
+			const payload = { runId: 'run-1', toolCallId: 'tc-1' };
+
+			const result = await controller.undoPreference(req, res, THREAD_ID, 'pref-1', payload);
+
+			expect(result).toEqual({ ok: true, event: undoneEvent });
+			expect(memoryService.checkThreadOwnership).toHaveBeenCalledWith(USER_ID, THREAD_ID);
+			expect(preferenceCardService.undo).toHaveBeenCalledWith(
+				req.user,
+				THREAD_ID,
+				'pref-1',
+				payload,
+			);
+		});
+
+		it('edit checks thread access, then returns the preference with the published fact', async () => {
+			memoryService.checkThreadOwnership.mockResolvedValue('owned');
+			const payload = { runId: 'run-1', toolCallId: 'tc-1', content: 'Keep replies brief.' };
+			const editedEvent: InstanceAiPreferenceCardEvent = {
+				...undoneEvent,
+				payload: { ...undoneEvent.payload, state: 'edited', content: 'Keep replies brief.' },
+			};
+			preferenceCardService.edit.mockResolvedValue({
+				preference: mock<AiPreferenceDto>({ id: 'pref-1', content: 'Keep replies brief.' }),
+				event: editedEvent,
+			});
+
+			const result = await controller.editPreference(req, res, THREAD_ID, 'pref-1', payload);
+
+			expect(memoryService.checkThreadOwnership).toHaveBeenCalledWith(USER_ID, THREAD_ID);
+			expect(preferenceCardService.edit).toHaveBeenCalledWith(
+				req.user,
+				THREAD_ID,
+				'pref-1',
+				payload,
+			);
+			expect(result.preference).toMatchObject({ id: 'pref-1' });
+			expect(result.event).toEqual(editedEvent);
+		});
+	});
+
 	describe('confirm', () => {
 		it('should require instanceAi:message scope', () => {
 			expect(scopeOf('confirm')).toEqual({ scope: 'instanceAi:message', globalOnly: true });
@@ -2414,6 +2481,7 @@ describe('InstanceAiController — durable-log SSE replay', () => {
 		mock<ProjectService>(),
 		mock<InstanceAiErrorReporterService>(),
 		mock<Publisher>(),
+		mock<InstanceAiPreferenceCardService>(),
 		globalConfig,
 	);
 
