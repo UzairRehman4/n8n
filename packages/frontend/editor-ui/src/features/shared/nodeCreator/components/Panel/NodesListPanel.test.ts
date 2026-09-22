@@ -7,7 +7,11 @@ import { useNodeCreatorStore } from '@/features/shared/nodeCreator/nodeCreator.s
 import { useViewStacks } from '@/features/shared/nodeCreator/composables/useViewStacks';
 import { mockRestrictedNodeTypes, mockSimplifiedNodeType } from '../../__tests__/utils';
 import NodesListPanel from './NodesListPanel.vue';
-import { REGULAR_NODE_CREATOR_VIEW, DEBOUNCE_TIME } from '@/app/constants';
+import {
+	REGULAR_NODE_CREATOR_VIEW,
+	DEBOUNCE_TIME,
+	NODE_CREATOR_OPEN_SOURCES,
+} from '@/app/constants';
 import type { ActionTypeDescription, NodeFilterType, SimplifiedNodeType } from '@/Interface';
 import { createComponentRenderer } from '@/__tests__/render';
 import { createTestNode } from '@/__tests__/mocks';
@@ -15,6 +19,7 @@ import {
 	createWorkflowDocumentId,
 	useWorkflowDocumentStore,
 } from '@/app/stores/workflowDocument.store';
+import { useUIStore } from '@/app/stores/ui.store';
 
 vi.mock('@/app/composables/useExternalHooks', () => ({
 	useExternalHooks: () => ({ run: vi.fn().mockResolvedValue(undefined) }),
@@ -297,6 +302,57 @@ describe('NodesListPanel', () => {
 			expect(screen.queryByText('Node 1')).toBeInTheDocument();
 
 			expect(screen.getByTestId('node-creator-search-bar')).toHaveValue('Node 1');
+		});
+	});
+
+	describe('Group command visibility', () => {
+		function renderWithConnectionSource({ grouped }: { grouped: boolean }) {
+			return getWrapperComponent(() => {
+				const source = createTestNode({ id: 'source', name: 'Source' });
+				const workflowDocumentStore = useWorkflowDocumentStore(createWorkflowDocumentId(''));
+				workflowDocumentStore.setNodes([source]);
+				if (grouped) workflowDocumentStore.createGroup([source.id], 'Group 1');
+
+				useUIStore().lastInteractedWithNodeId = source.id;
+				const nodeCreatorStore = useNodeCreatorStore();
+				nodeCreatorStore.openSource = NODE_CREATOR_OPEN_SOURCES.PLUS_ENDPOINT;
+				nodeCreatorStore.setSelectedView(REGULAR_NODE_CREATOR_VIEW);
+			});
+		}
+
+		it('hides Group when adding from a plus inside a group', async () => {
+			renderWithConnectionSource({ grouped: true });
+			await nextTick();
+
+			expect(screen.queryByText('Group')).not.toBeInTheDocument();
+			await fireEvent.input(screen.getByTestId('node-creator-search-bar'), {
+				target: { value: 'group' },
+			});
+			await waitFor(() => expect(screen.queryByText('Group')).not.toBeInTheDocument());
+		});
+
+		it('shows Group when adding from a plus outside a group', async () => {
+			renderWithConnectionSource({ grouped: false });
+			await nextTick();
+
+			expect(screen.getByText('Group')).toBeInTheDocument();
+		});
+
+		it('shows Group from the global node creator despite stale grouped-node state', async () => {
+			getWrapperComponent(() => {
+				const source = createTestNode({ id: 'source', name: 'Source' });
+				const workflowDocumentStore = useWorkflowDocumentStore(createWorkflowDocumentId(''));
+				workflowDocumentStore.setNodes([source]);
+				workflowDocumentStore.createGroup([source.id], 'Group 1');
+
+				useUIStore().lastInteractedWithNodeId = source.id;
+				const nodeCreatorStore = useNodeCreatorStore();
+				nodeCreatorStore.openSource = NODE_CREATOR_OPEN_SOURCES.ADD_NODE_BUTTON;
+				nodeCreatorStore.setSelectedView(REGULAR_NODE_CREATOR_VIEW);
+			});
+			await nextTick();
+
+			expect(screen.getByText('Group')).toBeInTheDocument();
 		});
 	});
 
