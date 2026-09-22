@@ -83,8 +83,8 @@ export interface NewOccurrence {
 	missedAfter?: Date | null;
 }
 
-/** Identity of one occurrence {@link ScheduledTaskRepository.retireMissedPending} retired. */
-export interface RetiredOccurrence {
+/** Identity of one task {@link ScheduledTaskRepository.retireMissedPending} retired. */
+export interface RetiredTask {
 	id: string;
 	jobId: number;
 	taskType: string;
@@ -92,13 +92,13 @@ export interface RetiredOccurrence {
 
 /** Outcome of one retire pass (see {@link ScheduledTaskRepository.retireMissedPending}). */
 export interface RetireMissedResult {
-	/** How many `pending` occurrences were retired as `missed`. */
+	/** How many `pending` tasks were retired as `missed`. */
 	retired: number;
 	/**
-	 * The retired occurrences whose job was already running as many occurrences as
-	 * its `concurrencyLimit` allows, so the limit is what kept them from a claim.
+	 * The retired tasks whose job was already running as many tasks as its
+	 * `concurrencyLimit` allows, so the limit is what kept them from a claim.
 	 */
-	heldByConcurrencyLimit: RetiredOccurrence[];
+	heldByConcurrencyLimit: RetiredTask[];
 }
 
 /** Identity of a row {@link ScheduledTaskRepository.insertIgnoringDuplicates} just created. */
@@ -899,7 +899,9 @@ export class ScheduledTaskRepository extends Repository<ScheduledTask> {
 		if (!Number.isSafeInteger(limit)) {
 			throw new UnexpectedError(`retireMissedPending needs an integer limit, got: ${limit}`);
 		}
-		if (limit <= 0) return { retired: 0, heldByConcurrencyLimit: [] };
+		if (limit <= 0) {
+			return { retired: 0, heldByConcurrencyLimit: [] };
+		}
 		return this.isPostgres
 			? await this.retireMissedPendingWithPostgres(limit)
 			: await this.retireMissedPendingWithSqlite(limit);
@@ -916,6 +918,10 @@ export class ScheduledTaskRepository extends Repository<ScheduledTask> {
 	 * rows that are `running` when the sweep happens: the run that held the row
 	 * back has usually ended by then, and a run that started after the deadline
 	 * never held it back.
+	 *
+	 * The limit itself is read live from the job, because no row records the value
+	 * in force at the deadline: the claim reads it live too. A limit changed between
+	 * the deadline and the sweep is classified with its new value.
 	 */
 	private atConcurrencyLimitSql(alias: string, jobAlias: string): string {
 		const deadline = `${alias}"missedAfter"`;
@@ -943,7 +949,7 @@ export class ScheduledTaskRepository extends Repository<ScheduledTask> {
 	 * another instance sweeps at the same time.
 	 */
 	private async retireMissedPendingWithPostgres(limit: number): Promise<RetireMissedResult> {
-		const rows = await this.manager.query<RetiredRow[]>(
+		const rows = await this.manager.query<PostgresRetiredRow[]>(
 			`WITH stale AS MATERIALIZED (
 			   SELECT t."id"
 			     FROM ${this.tableName} t
@@ -974,7 +980,7 @@ export class ScheduledTaskRepository extends Repository<ScheduledTask> {
 	 */
 	private async retireMissedPendingWithSqlite(limit: number): Promise<RetireMissedResult> {
 		return await this.manager.transaction(async (manager) => {
-			const rows = await manager.query<RetiredRow[]>(
+			const rows = await manager.query<SqliteRetiredRow[]>(
 				`SELECT t."id", t."jobId", t."taskType",
 				        (${this.atConcurrencyLimitSql('t.', 'j.')}) AS "heldByConcurrencyLimit"
 				   FROM ${this.tableName} t
@@ -1003,14 +1009,25 @@ export class ScheduledTaskRepository extends Repository<ScheduledTask> {
 	}
 }
 
-/** One row of the retire pass, as either dialect reads it back. */
-interface RetiredRow {
-	id: string | number;
+/** The retire pass columns both dialects read back the same way. */
+interface RetiredRowBase {
 	jobId: number;
 	taskType: string;
-	/** Postgres returns a boolean, SQLite a 0/1 integer. */
-	heldByConcurrencyLimit: boolean | number;
 }
+
+/** Postgres reads a `bigint` id back as a string and a SQL boolean as a boolean. */
+interface PostgresRetiredRow extends RetiredRowBase {
+	id: string;
+	heldByConcurrencyLimit: boolean;
+}
+
+/** SQLite has no boolean type: the rowid reads back as a number and the flag as 0 or 1. */
+interface SqliteRetiredRow extends RetiredRowBase {
+	id: number;
+	heldByConcurrencyLimit: 0 | 1;
+}
+
+type RetiredRow = PostgresRetiredRow | SqliteRetiredRow;
 
 function retireResult(rows: RetiredRow[]): RetireMissedResult {
 	return {
