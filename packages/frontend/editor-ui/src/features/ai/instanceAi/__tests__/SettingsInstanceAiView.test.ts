@@ -66,11 +66,13 @@ const {
 	mcpConnectionsExperimentMock,
 	computerUseExperimentMock,
 	browserUseExperimentMock,
+	contextPreferencesEnabledMock,
 	routerPushMock,
 } = vi.hoisted(() => ({
 	mcpConnectionsExperimentMock: vi.fn(),
 	browserUseExperimentMock: vi.fn(),
 	computerUseExperimentMock: vi.fn(),
+	contextPreferencesEnabledMock: vi.fn(() => true),
 	routerPushMock: vi.fn(),
 }));
 
@@ -92,7 +94,7 @@ vi.mock('@/experiments/instanceAiComputerUse', () => ({
 }));
 
 vi.mock('@/features/settings/context/context.utils', () => ({
-	isContextPreferencesEnabled: () => true,
+	isContextPreferencesEnabled: () => contextPreferencesEnabledMock(),
 }));
 
 const renderComponent = createComponentRenderer(SettingsInstanceAiView);
@@ -694,6 +696,15 @@ describe('SettingsInstanceAiView', () => {
 			expect(getByTestId('n8n-agent-permission-group-folders').textContent).toContain(
 				'settings.n8nAgent.permissions.group.default',
 			);
+		});
+
+		it('hides the Preferences group while the 111_context_preferences flag is off', () => {
+			contextPreferencesEnabledMock.mockReturnValueOnce(false);
+
+			const { queryByTestId, getByTestId } = renderComponent();
+
+			expect(queryByTestId('n8n-agent-permission-group-preferences')).toBeNull();
+			expect(getByTestId('n8n-agent-permission-group-workflows')).toBeVisible();
 		});
 
 		it('persists a permission change from an expanded group', async () => {
