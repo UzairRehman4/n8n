@@ -18,7 +18,7 @@ export class LicenseRenewalTask implements SystemTask {
 		intervalSeconds: AUTORENEWAL_INTERVAL / Time.seconds.toMilliseconds,
 	};
 
-	/** The SDK logs a failed pass and resolves, so the runner never sees a failure to retry. */
+	/** A retry after a failed renewal resends a token the server may have rotated already. */
 	readonly effects: SystemTaskEffects = 'non-idempotent';
 
 	readonly durable = false;
