@@ -1,3 +1,4 @@
+import { N8N_CHAT_INTEGRATION_TYPE } from '@n8n/api-types';
 import { createTeamProject, testDb, testModules } from '@n8n/backend-test-utils';
 import { Container } from '@n8n/di';
 import { v4 as uuid } from 'uuid';
@@ -347,6 +348,117 @@ describe('AgentRepository', () => {
 			await createPublishedAgent();
 
 			await expect(agentRepo.findPublishedIds([])).resolves.toEqual(new Set());
+		});
+	});
+
+	describe('findByProjectIdsPaginated - availableInChat filter', () => {
+		// No writer exists yet for this entry (AGENT-949 adds the schema variant),
+		// so the test seeds `integrations` directly. The `as` cast is fine in test code.
+		const n8nChatIntegration = {
+			type: N8N_CHAT_INTEGRATION_TYPE,
+		} as unknown as Agent['integrations'][number];
+
+		async function createPublishedAgent(overrides: Partial<Agent> = {}): Promise<Agent> {
+			const versionId = uuid();
+			const agent = await createAgent(overrides);
+			await createHistory(agent.id, versionId);
+			await agentRepo.update({ id: agent.id }, { activeVersionId: versionId });
+			return (await agentRepo.findById(agent.id)) as Agent;
+		}
+
+		it('returns a published agent that carries the n8n-chat integration', async () => {
+			const agent = await createPublishedAgent({ integrations: [n8nChatIntegration] });
+
+			const { count, data } = await agentRepo.findByProjectIdsPaginated([projectId], {
+				skip: 0,
+				take: 10,
+				filter: { availableInChat: true },
+			} as never);
+
+			expect(count).toBe(1);
+			expect(data.map((a) => a.id)).toEqual([agent.id]);
+		});
+
+		it('excludes a published agent without the n8n-chat integration', async () => {
+			await createPublishedAgent({ integrations: [] });
+
+			const { count, data } = await agentRepo.findByProjectIdsPaginated([projectId], {
+				skip: 0,
+				take: 10,
+				filter: { availableInChat: true },
+			} as never);
+
+			expect(count).toBe(0);
+			expect(data).toEqual([]);
+		});
+
+		it('excludes an unpublished agent that carries the n8n-chat integration', async () => {
+			await createAgent({ integrations: [n8nChatIntegration], activeVersionId: null });
+
+			const { count, data } = await agentRepo.findByProjectIdsPaginated([projectId], {
+				skip: 0,
+				take: 10,
+				filter: { availableInChat: true },
+			} as never);
+
+			expect(count).toBe(0);
+			expect(data).toEqual([]);
+		});
+
+		it('excludes a published + attached agent from another project', async () => {
+			const otherProject = await createTeamProject();
+			await createPublishedAgent({
+				projectId: otherProject.id,
+				integrations: [n8nChatIntegration],
+			});
+
+			const { count, data } = await agentRepo.findByProjectIdsPaginated([projectId], {
+				skip: 0,
+				take: 10,
+				filter: { availableInChat: true },
+			} as never);
+
+			expect(count).toBe(0);
+			expect(data).toEqual([]);
+		});
+
+		it('applies the strict complement when false', async () => {
+			const reachable = await createPublishedAgent({ integrations: [n8nChatIntegration] });
+			const unpublishedAttached = await createAgent({
+				integrations: [n8nChatIntegration],
+				activeVersionId: null,
+			});
+			const publishedUnattached = await createPublishedAgent({ integrations: [] });
+
+			const { count, data } = await agentRepo.findByProjectIdsPaginated([projectId], {
+				skip: 0,
+				take: 10,
+				filter: { availableInChat: false },
+			} as never);
+
+			expect(count).toBe(2);
+			expect(data.map((a) => a.id).sort()).toEqual(
+				[unpublishedAttached.id, publishedUnattached.id].sort(),
+			);
+			expect(data.map((a) => a.id)).not.toContain(reachable.id);
+		});
+
+		it('keeps count and skip/take pagination correct with the filter applied', async () => {
+			const agents: Agent[] = [];
+			for (let i = 0; i < 3; i++) {
+				agents.push(await createPublishedAgent({ integrations: [n8nChatIntegration] }));
+			}
+			await createPublishedAgent({ integrations: [] });
+
+			const page = await agentRepo.findByProjectIdsPaginated([projectId], {
+				skip: 1,
+				take: 1,
+				sortBy: 'name:asc',
+				filter: { availableInChat: true },
+			} as never);
+
+			expect(page.count).toBe(agents.length);
+			expect(page.data).toHaveLength(1);
 		});
 	});
 });

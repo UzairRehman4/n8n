@@ -1,4 +1,6 @@
+import { N8N_CHAT_INTEGRATION_TYPE } from '@n8n/api-types';
 import type { AgentIntegrationConfig, ListAgentsQueryDto } from '@n8n/api-types';
+import { escapeLike, LIKE_ESCAPE_CLAUSE } from '@n8n/db';
 import { Service } from '@n8n/di';
 import {
 	DataSource,
@@ -121,6 +123,27 @@ export class AgentRepository extends Repository<Agent> {
 		if (filter?.availableInMCP !== undefined) {
 			query.andWhere('agent.availableInMCP = :availableInMCP', {
 				availableInMCP: filter.availableInMCP,
+			});
+		}
+		if (filter?.availableInChat !== undefined) {
+			// Each dialect serializes the JSON column's whitespace differently, so a
+			// LIKE against the quoted type literal is the one form that holds across
+			// all of them. The match stays in SQL (not filtered in memory, unlike
+			// `findByIntegrationCredential`) so `count` and pagination stay correct.
+			// `integrations` is text-backed on sqlite but a real `json` column on
+			// postgres, which has no implicit cast to text for LIKE — same treatment
+			// as `apiKey.scopes` in `PublicApiKeyService`.
+			// ponytail: full-column text scan, and a false positive if any other
+			// value in the column is ever this exact literal (a Telegram allowlist
+			// entry, say). Key the predicate on the parsed type once the integration
+			// schema has this channel (AGENT-949).
+			const isPostgres = this.manager.connection.options.type === 'postgres';
+			const integrationsText = isPostgres ? '"agent"."integrations"::text' : 'agent.integrations';
+			const reachableOverChat =
+				`${integrationsText} LIKE :n8nChatPattern ${LIKE_ESCAPE_CLAUSE} ` +
+				'AND agent.activeVersionId IS NOT NULL';
+			query.andWhere(filter.availableInChat ? reachableOverChat : `NOT (${reachableOverChat})`, {
+				n8nChatPattern: `%"${escapeLike(N8N_CHAT_INTEGRATION_TYPE)}"%`,
 			});
 		}
 	}

@@ -24,6 +24,7 @@ import { CredentialsService } from '@/credentials/credentials.service';
 import { ConflictError } from '@/errors/response-errors/conflict.error';
 import { NotFoundError } from '@/errors/response-errors/not-found.error';
 import { EventService } from '@/events/event.service';
+import { ProjectScopeService } from '@/permissions.ee/project-scope.service';
 
 import { AgentChatAttachmentService } from './agent-chat-attachment.service';
 import { AgentExecutionService } from './agent-execution.service';
@@ -79,6 +80,7 @@ export class AgentsService {
 		private readonly eventService: EventService,
 		private readonly agentExecutionService: AgentExecutionService,
 		private readonly credentialsService: CredentialsService,
+		private readonly projectScopeService: ProjectScopeService,
 	) {}
 
 	/**
@@ -355,11 +357,54 @@ export class AgentsService {
 		return await this.agentRepository.findByIdInProjects(agentId, projectIds);
 	}
 
+	/**
+	 * The two audiences of the global list have different scoping, so each one
+	 * has its own method below. The chat filter selects between them: it is the
+	 * only thing that tells the two apart on a route that has no project in its
+	 * URL.
+	 */
 	async findByUserPaginated(
-		userId: string,
+		user: User,
 		options: ListAgentsQueryDto,
 	): Promise<{ count: number; data: Agent[] }> {
-		const projectRelations = await this.projectRelationRepository.findAllByUser(userId);
+		return options.filter?.availableInChat === undefined
+			? await this.findByUserMembershipPaginated(user, options)
+			: await this.findChatReachableByUserPaginated(user, options);
+	}
+
+	/**
+	 * Agents the user can reach over the n8n chat channel. Scoped to projects
+	 * where the user holds `agent:read` **and** `agent:execute` (admin, editor
+	 * and viewer), which excludes `project:chatUser`, who holds execute alone.
+	 * The reason is the response shape: this list returns the full `Agent`
+	 * entity, published instructions, tools and skills included, so a chat-only
+	 * member has no business in it until the response is a lean projection.
+	 * Note this scoping covers only this branch — the membership branch below
+	 * hands the same full entity to any member of the project, `agent:read` or
+	 * not. That is pre-existing and out of scope here, so do not read this as a
+	 * guarantee the endpoint makes as a whole.
+	 * Carries the project relation, because the chat page labels each agent
+	 * with its project.
+	 */
+	private async findChatReachableByUserPaginated(
+		user: User,
+		options: ListAgentsQueryDto,
+	): Promise<{ count: number; data: Agent[] }> {
+		const projectIds = await this.projectScopeService.getProjectIds(user, [
+			'agent:read',
+			'agent:execute',
+		]);
+		return await this.agentRepository.findByProjectIdsPaginated(projectIds, options, {
+			withProject: true,
+		});
+	}
+
+	/** The agents overview list: every project the user belongs to, no scope check. */
+	private async findByUserMembershipPaginated(
+		user: User,
+		options: ListAgentsQueryDto,
+	): Promise<{ count: number; data: Agent[] }> {
+		const projectRelations = await this.projectRelationRepository.findAllByUser(user.id);
 		const projectIds = projectRelations.map((pr) => pr.projectId);
 		return await this.agentRepository.findByProjectIdsPaginated(projectIds, options);
 	}
