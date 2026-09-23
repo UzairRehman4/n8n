@@ -48,6 +48,9 @@ export function makeThread(): ThreadRuntime {
 		} | null,
 		setPendingWorkflowAttachment: vi.fn(),
 		clearPendingWorkflowAttachment: vi.fn(),
+		transientWorkflowReferences: new Map(),
+		upsertTransientWorkflowReference: vi.fn(),
+		removeTransientWorkflowReference: vi.fn(),
 		loadHistoricalMessages: vi.fn().mockResolvedValue('applied'),
 		loadThreadStatus: vi.fn().mockResolvedValue(undefined),
 		connectSSE: vi.fn(),
@@ -68,6 +71,12 @@ export function makeThread(): ThreadRuntime {
 	});
 	thread.clearPendingWorkflowAttachment = vi.fn(() => {
 		thread.pendingWorkflowAttachment = null;
+	});
+	thread.upsertTransientWorkflowReference = vi.fn((reference) => {
+		thread.transientWorkflowReferences.set(reference.referenceId, reference);
+	});
+	thread.removeTransientWorkflowReference = vi.fn((referenceId) => {
+		thread.transientWorkflowReferences.delete(referenceId);
 	});
 	return thread as unknown as ThreadRuntime;
 }
@@ -102,8 +111,19 @@ export const InstanceAiInputStub = defineComponent({
 		isSubmitting: { type: Boolean, required: false },
 		isWorkflowBuilderAvailable: { type: Boolean, required: false },
 		contextChip: { type: Object, required: false },
+		mentionsEnabled: { type: Boolean, required: false },
+		mentionProjectId: { type: String, required: false },
+		mentionArtifacts: { type: Array, required: false },
+		mentionActiveWorkflowId: { type: String, required: false },
+		reservedAttachmentCount: { type: Number, required: false },
 	},
-	emits: ['submit', 'dismiss-context-chip'],
+	emits: [
+		'submit',
+		'dismiss-context-chip',
+		'mention-reference-added',
+		'mention-reference-removed',
+		'mention-workflow-open',
+	],
 	setup(props, { emit, expose }) {
 		const inputDraft = ref(inputState.initialDraft);
 		const hasAttachments = ref(inputState.hasAttachments);
