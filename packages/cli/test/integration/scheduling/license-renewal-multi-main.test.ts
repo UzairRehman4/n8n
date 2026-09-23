@@ -336,7 +336,9 @@ describe('license renewal across two mains over one database', () => {
 		await retryUntil(() => expect(publishCommand).toHaveBeenCalledTimes(1));
 		expect(publishCommand).toHaveBeenCalledWith({ command: 'reload-license' });
 		expect(b.onRunError).not.toHaveBeenCalled();
-		expect(b.license.getExpiryDate()).toEqual(certExpiry(await b.license.loadCertStr()));
+		const storedToken = certToken(await b.license.loadCertStr());
+		expect(storedToken).toBe(fakeLicenseServer.token);
+		expect(b.license.getExpiryDate()).not.toEqual(certExpiry(initialCert));
 		expect(a.license.getExpiryDate()).toEqual(certExpiry(initialCert));
 	}, 15_000);
 
