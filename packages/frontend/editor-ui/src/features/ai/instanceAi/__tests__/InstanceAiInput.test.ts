@@ -523,6 +523,7 @@ describe('InstanceAiInput', () => {
 				promptModified: false,
 			},
 			expect.any(Number),
+			expect.any(Function),
 		]);
 		expect(textbox).toHaveValue('');
 	});
@@ -819,6 +820,7 @@ describe('InstanceAiInput', () => {
 				expect.any(Function),
 				{ kind: 'user_typed' },
 				expect.any(Number),
+				expect.any(Function),
 			],
 		]);
 		expect(textbox).toHaveValue('');
@@ -1015,6 +1017,7 @@ describe('InstanceAiInput', () => {
 				expect.any(Function),
 				{ kind: 'user_typed' },
 				expect.any(Number),
+				expect.any(Function),
 			],
 		]);
 	});
@@ -1057,6 +1060,7 @@ describe('InstanceAiInput', () => {
 				expect.any(Function),
 				{ kind: 'user_typed' },
 				expect.any(Number),
+				expect.any(Function),
 			],
 		]);
 	});
