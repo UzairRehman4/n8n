@@ -3,6 +3,9 @@ info:
   title: decorator-routes
   version: 0.0.0
 paths:
+  /community-packages/{name}:
+    delete:
+      $ref: ./handlers/community-packages/spec/paths/uninstallPackage.generated.yml
   /credentials:
     get:
       $ref: ./handlers/credentials/spec/paths/getCredentials.generated.yml
