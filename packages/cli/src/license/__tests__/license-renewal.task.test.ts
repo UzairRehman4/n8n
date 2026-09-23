@@ -1,3 +1,4 @@
+import { ScheduledJobMisfirePolicy } from '@n8n/constants';
 import { mock } from 'vitest-mock-extended';
 
 import type { License } from '@/license';
@@ -17,6 +18,7 @@ describe('LicenseRenewalTask', () => {
 		expect(task.name).toBe('license-renewal');
 		expect(task.schedule).toEqual({ kind: 'interval', intervalSeconds: 900 });
 		expect(task.effects).toBe('non-idempotent');
+		expect(task.misfirePolicy).toBe(ScheduledJobMisfirePolicy.Coalesce);
 		expect(task.durable).toBe(true);
 		expect(task.runOnTakeover).toBe(true);
 	});

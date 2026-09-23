@@ -276,7 +276,7 @@ describe('license renewal across two mains over one database', () => {
 		await testDb.terminate();
 	});
 
-	it('provisions the job with one attempt, a skip misfire policy and the SDK cadence', async () => {
+	it('provisions the job with one attempt, a coalesce misfire policy and the SDK cadence', async () => {
 		const job = await provisionJob(a.task);
 
 		expect(job).toMatchObject({
@@ -286,7 +286,7 @@ describe('license renewal across two mains over one database', () => {
 			kind: 'interval',
 			intervalSeconds: 900,
 			maxAttempts: 1,
-			misfirePolicy: ScheduledJobMisfirePolicy.Skip,
+			misfirePolicy: ScheduledJobMisfirePolicy.Coalesce,
 		});
 	});
 

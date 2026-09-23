@@ -1,4 +1,4 @@
-import { Time } from '@n8n/constants';
+import { ScheduledJobMisfirePolicy, Time } from '@n8n/constants';
 import { SystemTask } from '@n8n/decorators';
 import type { SystemTaskEffects, SystemTaskSchedule } from '@n8n/decorators';
 import { AUTORENEWAL_INTERVAL } from '@n8n_io/license-sdk';
@@ -20,6 +20,9 @@ export class LicenseRenewalTask implements SystemTask {
 
 	/** A retry after a failed renewal resends a token the server may have rotated already. */
 	readonly effects: SystemTaskEffects = 'non-idempotent';
+
+	/** A check that missed its grace window still runs once, late. */
+	readonly misfirePolicy: ScheduledJobMisfirePolicy = ScheduledJobMisfirePolicy.Coalesce;
 
 	readonly durable = true;
 
