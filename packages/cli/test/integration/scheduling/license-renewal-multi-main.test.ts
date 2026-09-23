@@ -325,6 +325,21 @@ describe('license renewal across two mains over one database', () => {
 		expect(b.onRunError).not.toHaveBeenCalled();
 	}, 15_000);
 
+	it('renews and broadcasts from the non-leader main when it alone claims the due occurrence', async () => {
+		const job = await provisionJob(a.task);
+		const occurrence = await seedDueOccurrence(job);
+
+		expect(await b.scheduler.execute()).toHaveLength(1);
+
+		await retryUntil(async () => expect(await statusOf(occurrence)).toBe('succeeded'));
+		expect(fakeLicenseServer).toMatchObject({ requests: 1, rotations: 1, rejected: 0 });
+		await retryUntil(() => expect(publishCommand).toHaveBeenCalledTimes(1));
+		expect(publishCommand).toHaveBeenCalledWith({ command: 'reload-license' });
+		expect(b.onRunError).not.toHaveBeenCalled();
+		expect(b.license.getExpiryDate()).toEqual(certExpiry(await b.license.loadCertStr()));
+		expect(a.license.getExpiryDate()).toEqual(certExpiry(initialCert));
+	}, 15_000);
+
 	it('records a failed pass as failed after one attempt and never retries it', async () => {
 		const job = await provisionJob(a.task);
 		const occurrence = await seedDueOccurrence(job);
